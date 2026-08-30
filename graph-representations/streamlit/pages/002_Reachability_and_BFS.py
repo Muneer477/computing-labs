@@ -50,6 +50,10 @@ for u, v in edges:
     adj[v].append(u)
 
 
+# ---------------------------------------
+# Interactive BFS Demo
+# ---------------------------------------
+
 col1, col2 = st.columns([1, 1])
 
 
@@ -84,7 +88,9 @@ with col2:
     )
 
     st.markdown("### BFS Levels")
+
     for distance in range(k + 1):
+
         nodes_at_distance = sorted(
             node
             for node, d in reachable.items()
@@ -95,6 +101,11 @@ with col2:
             f"- **Distance {distance}:** "
             f"{', '.join(nodes_at_distance)}"
         )
+
+
+# ---------------------------------------
+# Graph Visualization
+# ---------------------------------------
 
 with col1:
 
@@ -153,6 +164,10 @@ with col1:
     )
 
 
+# ---------------------------------------
+# BFS Explanation
+# ---------------------------------------
+
 st.divider()
 
 st.header(
@@ -161,36 +176,54 @@ st.header(
 
 st.code(
 """
+from collections import deque
+
 # Find all nodes within k hops
+#
 # Input Parameters:
 #   adj   : adjacency list
 #   start : starting node
 #   k     : maximum number of hops
+#
 # Returns:
-#   set of nodes at distance <= k hops from start node
+#   dictionary mapping each reachable node
+#   to its shortest distance from the start node
 
 def nodes_within_k_hops(adj, start, k):
-    visited = {start}        #visited is the set of nodes visited so far
-    queue = [(start, 0)]     #use a queue data structure maintaining nodes seen, but whose edges are not explored.
-                             #for each node, record (node, distance form start)
-    while queue:             #loop as long as there are still nodes in the queue
-        node, dist = queue.pop(0)
 
-        # Stop expanding once we reach k hops
+    # Starting node is at distance 0
+    distances = {start: 0}
+
+    # Queue stores (node, distance)
+    queue = deque([
+        (start, 0)
+    ])
+
+    while queue:
+
+        node, dist = queue.popleft()
+
+        # Do not explore beyond k hops
         if dist == k:
             continue
 
-        # Explore all neighbors of the current node
+        # Explore neighbors of the current node
         for nbr in adj[node]:
-            if nbr not in visited:
-                visited.add(nbr)    #add nbr to visited if not in visited
-                queue.append(       #add (nbr, distance from start) to queue
+
+            # Visit each node only once
+            if nbr not in distances:
+
+                distances[nbr] = dist + 1
+
+                queue.append(
                     (nbr, dist + 1)
                 )
-    return visited                  #visited is the set of nodes at distance <= k steps from start
+
+    return distances
 """,
 language="python"
 )
+
 
 st.info("""
 BFS explores the graph level by level.
@@ -198,7 +231,12 @@ BFS explores the graph level by level.
 It first explores nodes 1 hop away,
 then 2 hops away,
 then 3 hops away, and so on.
+
+The `distances` dictionary records the shortest
+distance from the starting node to every node
+reached within the selected number of hops.
 """)
+
 
 st.info("""
 BFS visits each node at most once
