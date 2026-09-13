@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import networkx as nx
+import matplotlib.pyplot as plt
+import numpy as np
 from pathlib import Path
 
 from graphutils import (
@@ -104,15 +106,9 @@ The graph is undirected, so the edge could equivalently be written as:
 
 
 # --------------------------------------------------
-# Basic Graph Statistics
+# Build NetworkX Graph
 # --------------------------------------------------
 
-st.subheader("Basic Graph Statistics")
-
-num_edges = len(edge_df)
-num_nodes = len(nodes)
-
-# Build a NetworkX graph for additional graph statistics
 G = nx.Graph()
 
 G.add_nodes_from(nodes)
@@ -123,6 +119,122 @@ G.add_edges_from(
         name=None
     )
 )
+
+
+# --------------------------------------------------
+# Facebook Friendship Network
+# --------------------------------------------------
+
+st.subheader("Facebook Friendship Network")
+
+st.info("""
+### How to Read This Network
+
+- Each **blue dot (node)** represents one Facebook user.
+- Each **line (edge)** represents a friendship between two users.
+- The complete network contains **4,039 users and 88,234 friendships**.
+
+**Why are the nodes positioned this way?**  
+The graph uses a **spring layout**. Imagine the friendships as springs:
+connected nodes tend to pull toward each other, while nodes also repel
+each other. The algorithm uses these forces to decide where the nodes
+should be placed on the screen.
+
+The spring layout does **not change the actual network**. It only determines
+where the nodes are drawn. Therefore, two nodes appearing close together
+does not necessarily mean that they are directly connected. An edge between
+them is what shows a direct connection.
+
+**Why do some areas look dark or black?**  
+The graph contains **88,234 edges**. In densely connected parts of the
+network, many edges are drawn on top of one another. Their overlap makes
+those areas appear dark or black. A dark area therefore indicates a region
+with many overlapping connections; it is not a single black node.
+""")
+
+if "facebook_network_pos" not in st.session_state:
+    with st.spinner("Calculating network layout..."):
+        st.session_state["facebook_network_pos"] = nx.spring_layout(
+            G,
+            seed=42,
+            iterations=20
+        )
+
+pos = st.session_state["facebook_network_pos"]
+
+# Degree of each node
+node_degrees = dict(G.degree())
+
+# Keep every node visible, while making high-degree nodes easier to notice
+node_sizes = [
+    5 + (node_degrees[node] / highest_degree) * 45
+    for node in G.nodes()
+]
+
+fig, ax = plt.subplots(figsize=(15, 15))
+
+# Draw all 88,234 friendship edges
+nx.draw_networkx_edges(
+    G,
+    pos,
+    width=0.1,
+    alpha=0.12,
+    ax=ax
+)
+
+# Draw all 4,039 nodes
+nx.draw_networkx_nodes(
+    G,
+    pos,
+    node_size=node_sizes,
+    alpha=0.75,
+    ax=ax
+)
+
+# Identify the five highest-degree nodes
+top5_nodes = [
+    node
+    for node, degree in sorted(
+        node_degrees.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )[:5]
+]
+
+# Draw the five major hubs again so they stand out
+nx.draw_networkx_nodes(
+    G,
+    pos,
+    nodelist=top5_nodes,
+    node_size=[
+        5 + (node_degrees[node] / highest_degree) * 90
+        for node in top5_nodes
+    ],
+    ax=ax
+)
+
+
+
+ax.set_title(
+    "Facebook Friendship Network\n"
+    f"{len(nodes):,} Nodes • {len(edge_df):,} Edges"
+)
+
+ax.axis("off")
+
+st.pyplot(fig, use_container_width=True)
+
+plt.close(fig)
+
+
+# --------------------------------------------------
+# Basic Graph Statistics
+# --------------------------------------------------
+
+st.subheader("Basic Graph Statistics")
+
+num_edges = len(edge_df)
+num_nodes = len(nodes)
 
 # Graph density
 density = nx.density(G)
@@ -191,9 +303,24 @@ Average Degree = {avg_degree:.2f}
 
 st.subheader("Top 10 Highest-Degree Nodes")
 
+st.markdown("""
+This graph ranks the **individual Facebook nodes** from the highest degree to the lower degrees.
+
+- **Degree** = number of direct connections a node has.
+- The **1st bar** is the node with the highest degree.
+- The **2nd bar** is the node with the second-highest degree.
+- The bars continue in **decreasing degree order** from left to right.
+
+This is different from the degree-distribution histogram below.  
+Here, **one bar = one individual node**, not a degree range.
+""")
+
+# Calculate degree for every node and sort from highest to lowest.
+degrees = dict(G.degree())
+
 top10 = sorted(
     degrees.items(),
-    key=lambda x: x[1],
+    key=lambda item: item[1],
     reverse=True
 )[:10]
 
@@ -202,40 +329,91 @@ top10_df = pd.DataFrame(
     columns=["Node", "Degree"]
 )
 
+# Add a simple rank so students can see 1st, 2nd, 3rd, etc.
+top10_df.insert(
+    0,
+    "Rank",
+    range(1, len(top10_df) + 1)
+)
+
+st.markdown("#### Ranking table")
+
 st.dataframe(
     top10_df,
     hide_index=True,
     use_container_width=True
 )
 
+st.markdown("#### Highest degree → lowest degree")
 
-# --------------------------------------------------
-# Top 10 Degree Chart
-# --------------------------------------------------
+fig, ax = plt.subplots(figsize=(11, 6))
 
-st.subheader("Top 10 Nodes by Degree")
+rank_labels = [
+    f"#{rank}\nNode {node}"
+    for rank, node in zip(top10_df["Rank"], top10_df["Node"])
+]
 
-top10_chart_df = top10_df.copy()
-
-top10_chart_df["Node"] = (
-    top10_chart_df["Node"].astype(str)
+bars = ax.bar(
+    rank_labels,
+    top10_df["Degree"]
 )
 
-top10_chart_df = (
-    top10_chart_df.set_index("Node")
+ax.set_title(
+    "Top 10 Nodes Ranked by Degree",
+    fontsize=15
 )
 
-st.bar_chart(
-    top10_chart_df,
+ax.set_xlabel(
+    "Rank and Node",
+    fontsize=11
+)
+
+ax.set_ylabel(
+    "Degree (Number of Direct Connections)",
+    fontsize=11
+)
+
+ax.grid(
+    axis="y",
+    alpha=0.25
+)
+
+# Show the exact degree above every bar.
+for bar, degree in zip(bars, top10_df["Degree"]):
+    ax.text(
+        bar.get_x() + bar.get_width() / 2,
+        bar.get_height(),
+        str(degree),
+        ha="center",
+        va="bottom",
+        fontsize=9
+    )
+
+plt.tight_layout()
+
+st.pyplot(
+    fig,
     use_container_width=True
 )
 
-st.info("""
-This chart compares the degrees of the 10 most highly
-connected nodes in the dataset.
+plt.close(fig)
 
-A larger degree means that the node has more direct
-connections in the social network.
+st.info("""
+### How to read this graph
+
+Start from the **left**.
+
+The first bar is the node with the **highest degree** in the Facebook network.
+The next bar has the **second-highest degree**, and so on.
+
+For example:
+
+**Node 107 → Degree 1045**
+
+means Node 107 has **1,045 direct connections** in this dataset.
+
+Because the nodes are sorted by degree, the bars should get shorter as you move
+from left to right.
 """)
 
 
@@ -245,71 +423,381 @@ connections in the social network.
 
 st.subheader("Degree Distribution")
 
-degree_values = list(
-    degrees.values()
+degree_values = list(degrees.values())
+max_degree = max(degree_values)
+
+st.markdown("""
+Before looking at the degree distribution, let's understand **degree** with a tiny example.
+
+A **node** is one Facebook user.  
+An **edge** is a friendship.  
+The **degree of a node** is the number of friendship lines directly connected to it.
+""")
+
+# --------------------------------------------------
+# Small teaching example
+# --------------------------------------------------
+
+example_G = nx.Graph()
+
+example_G.add_edges_from([
+    ("A", "B"),
+    ("A", "C"),
+    ("A", "D")
+])
+
+example_pos = {
+    "A": (0, 0),
+    "B": (-1, 1),
+    "C": (0, 1.3),
+    "D": (1, 1)
+}
+
+example_fig, example_ax = plt.subplots(figsize=(6, 3.8))
+
+nx.draw_networkx_nodes(
+    example_G,
+    example_pos,
+    node_size=1400,
+    ax=example_ax
 )
 
-bin_width = 25
-max_degree = max(degree_values)
+nx.draw_networkx_edges(
+    example_G,
+    example_pos,
+    width=2,
+    ax=example_ax
+)
+
+nx.draw_networkx_labels(
+    example_G,
+    example_pos,
+    font_size=12,
+    ax=example_ax
+)
+
+example_ax.set_title("Simple Degree Example")
+example_ax.axis("off")
+
+st.pyplot(example_fig, use_container_width=False)
+
+plt.close(example_fig)
+
+st.info("""
+In this example, **Node A has degree 3** because three friendship lines
+touch Node A: A–B, A–C, and A–D.
+
+So if a Facebook user is connected to 25 other users, that user's
+**degree is 25**.
+""")
+
+# --------------------------------------------------
+# Student-friendly fixed-width bins
+# --------------------------------------------------
+
+st.markdown("### Now group users by degree")
+
+st.markdown("""
+Instead of using an unclear setting such as `bins=50`, we use a
+**fixed bin width (span) of 20**.
+
+That means:
+
+- **0–19** = users with 0 to 19 connections
+- **20–39** = users with 20 to 39 connections
+- **40–59** = users with 40 to 59 connections
+- **60–79** = users with 60 to 79 connections
+- and so on
+
+**One bar = one degree range.**  
+The **height of the bar = how many users are inside that range.**
+""")
+
+bin_width = 20
+
+# Build every 20-degree range from 0 up to the maximum degree.
+bin_starts = list(range(0, max_degree + 1, bin_width))
 
 distribution_rows = []
 
-start = 0
-
-while start <= max_degree:
-
-    end = start + bin_width - 1
+for range_start in bin_starts:
+    range_end = range_start + bin_width - 1
 
     count = sum(
         1
         for degree in degree_values
-        if start <= degree <= end
+        if range_start <= degree <= range_end
     )
 
-    # Only display ranges that actually contain nodes
-    if count > 0:
+    distribution_rows.append({
+        "Range Start": range_start,
+        "Range End": range_end,
+        "Degree Range": f"{range_start}–{range_end}",
+        "Number of Users": count
+    })
 
-        distribution_rows.append(
-            {
-                "Degree Range": f"{start}-{end}",
-                "Number of Nodes": count,
-                "Range Start": start
-            }
+degree_distribution_df = pd.DataFrame(distribution_rows)
+
+# --------------------------------------------------
+# Show the most useful part first
+# --------------------------------------------------
+
+st.markdown("### Degree Distribution")
+
+st.caption(
+    "The network goes up to degree "
+    f"{max_degree}, so the graph is shown in smaller sections "
+    "to keep every degree range readable."
+)
+
+range_options = []
+
+chunk_size = 200
+
+for chunk_start in range(0, max_degree + 1, chunk_size):
+    chunk_end = min(chunk_start + chunk_size - 1, max_degree)
+    range_options.append((chunk_start, chunk_end))
+
+selected_range_label = st.selectbox(
+    "Choose which degree range to view",
+    [
+        f"{start_value}–{end_value}"
+        for start_value, end_value in range_options
+    ],
+    index=0,
+    key="degree_distribution_range"
+)
+
+selected_index = [
+    f"{start_value}–{end_value}"
+    for start_value, end_value in range_options
+].index(selected_range_label)
+
+selected_start, selected_end = range_options[selected_index]
+
+visible_df = degree_distribution_df[
+    (degree_distribution_df["Range Start"] >= selected_start)
+    & (degree_distribution_df["Range Start"] <= selected_end)
+].copy()
+
+fig, ax = plt.subplots(figsize=(12, 6))
+
+bars = ax.bar(
+    visible_df["Degree Range"],
+    visible_df["Number of Users"]
+)
+
+ax.set_title(
+    f"Facebook Users by Degree Range ({selected_start}–{selected_end})",
+    fontsize=15
+)
+
+ax.set_xlabel(
+    "Degree Range (Number of Connections per User)",
+    fontsize=11
+)
+
+ax.set_ylabel(
+    "Number of Facebook Users",
+    fontsize=11
+)
+
+ax.tick_params(
+    axis="x",
+    rotation=45
+)
+
+ax.grid(
+    axis="y",
+    alpha=0.25
+)
+
+# Put the exact number of users above each bar.
+for bar, count in zip(bars, visible_df["Number of Users"]):
+    if count > 0:
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height(),
+            str(int(count)),
+            ha="center",
+            va="bottom",
+            fontsize=9
         )
 
-    start += bin_width
+plt.tight_layout()
 
+st.pyplot(fig, use_container_width=True)
 
-degree_distribution_df = pd.DataFrame(
-    distribution_rows
+plt.close(fig)
+
+st.info(
+    f"""
+### How to read this graph
+
+Look at one bar at a time.
+
+For example, the bar labeled **20–39** represents Facebook users who have
+between **20 and 39 direct connections**.
+
+- The label at the bottom tells you the **degree range**.
+- The height of the bar tells you the **number of users** in that range.
+- The number written above the bar gives you the exact user count.
+
+We use a **bin width (span) of {bin_width}**, so every bar covers exactly
+{bin_width} degree values.
+
+The complete dataset contains degree values up to **{max_degree}**.
+Use the selector above the graph to look at the lower-degree users first,
+then move through the higher-degree ranges without squeezing everything
+into one unreadable graph.
+"""
 )
 
-degree_distribution_df = (
-    degree_distribution_df
-    .sort_values("Range Start")
+# --------------------------------------------------
+# Log-Log Degree Distribution
+# --------------------------------------------------
+
+st.subheader("Log-Log Degree Distribution")
+
+st.markdown("""
+The histogram above grouped users into ranges such as **20–39**.
+
+This graph does something different:
+
+**It looks at each exact degree separately.**
+
+For example:
+
+- Degree **20** = a user has exactly 20 direct friendship connections.
+- If **50 users** have degree 20, then the frequency of degree 20 is **50**.
+""")
+
+# Count how many users have each exact degree.
+degree_frequency = {}
+
+for degree in degree_values:
+    degree_frequency[degree] = degree_frequency.get(degree, 0) + 1
+
+degree_frequency_df = pd.DataFrame(
+    sorted(degree_frequency.items()),
+    columns=["Degree", "Number of Users"]
 )
 
-degree_distribution_df = (
-    degree_distribution_df
-    .drop(columns=["Range Start"])
-)
+st.markdown("#### Step 1: Exact degree and number of users")
 
-
-st.bar_chart(
-    degree_distribution_df,
-    x="Degree Range",
-    y="Number of Nodes",
+st.dataframe(
+    degree_frequency_df.head(12),
+    hide_index=True,
     use_container_width=True
 )
 
+st.caption(
+    "Example: if Degree = 20 and Number of Users = 50, "
+    "that means 50 different users each have exactly 20 connections."
+)
+
+st.markdown("""
+So on the graph below:
+
+- **X-axis = exact degree**
+- **Y-axis = number of users with that exact degree**
+""")
+
+st.markdown("#### Step 2: Why use a log-log scale?")
+
+st.markdown("""
+The Facebook graph contains both small degree values and very large degree values.
+
+A normal scale spaces numbers like this:
+
+`0, 100, 200, 300, ...`
+
+A logarithmic scale gives equal visual space to multiplication by 10:
+
+`1, 10, 100, 1000`
+
+This helps us see low-degree and high-degree values together more clearly.
+
+**Important:** the log scale does not change a user's degree.  
+It only changes how the numbers are spaced on the graph.
+""")
+
+fig, ax = plt.subplots(figsize=(11, 6))
+
+ax.scatter(
+    degree_frequency_df["Degree"],
+    degree_frequency_df["Number of Users"],
+    s=24,
+    alpha=0.7
+)
+
+ax.set_xscale("log")
+ax.set_yscale("log")
+
+ax.set_title(
+    "Log-Log Degree Distribution of the Facebook Network",
+    fontsize=15
+)
+
+ax.set_xlabel(
+    "Exact Degree (Number of Connections) — Log Scale",
+    fontsize=11
+)
+
+ax.set_ylabel(
+    "Number of Users with That Exact Degree — Log Scale",
+    fontsize=11
+)
+
+ax.grid(
+    True,
+    which="both",
+    alpha=0.25
+)
+
+plt.tight_layout()
+
+st.pyplot(fig, use_container_width=True)
+
+plt.close(fig)
+
 st.info("""
-The degree distribution groups nodes into ranges of 25.
+### How to read one dot
 
-For example, the 0–24 range represents nodes whose degree
-is between 0 and 24.
+Each dot represents **one exact degree value**.
 
-Each bar shows how many nodes fall within that degree range.
-This makes the overall connectivity pattern easier to interpret.
+Example:
+
+If a dot represents:
+
+- Degree = 20
+- Number of Users = 50
+
+then it means:
+
+**50 users each have exactly 20 direct connections.**
+
+### How to read the direction
+
+- Move **right** → users have more connections.
+- Move **up** → more users have that exact degree.
+- Move **down** → fewer users have that exact degree.
+
+### Why Professor Mani mentioned a straight line
+
+In some networks, a power-law relationship can appear approximately as a
+**descending straight-line pattern** on a log-log graph.
+
+We should not draw a straight line manually.
+
+First, we show the real Facebook data. Then we can check whether the points
+actually form an approximately straight pattern.
+""")
+
+st.markdown("""
+#### One-sentence summary
+
+**The histogram groups degrees into ranges, while this log-log graph shows each exact degree separately and changes the axis spacing so the overall pattern is easier to see.**
 """)
 
 
