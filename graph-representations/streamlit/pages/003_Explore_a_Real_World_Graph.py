@@ -783,15 +783,13 @@ then it means:
 - Move **up** → more users have that exact degree.
 - Move **down** → fewer users have that exact degree.
 
-### Why Professor Mani mentioned a straight line
+### Interpreting the overall pattern
 
 In some networks, a power-law relationship can appear approximately as a
 **descending straight-line pattern** on a log-log graph.
 
-We should not draw a straight line manually.
-
-First, we show the real Facebook data. Then we can check whether the points
-actually form an approximately straight pattern.
+The graph above shows the actual Facebook network data. We can examine the
+observed points to see whether they approximately follow this type of pattern.
 """)
 
 st.markdown("""
