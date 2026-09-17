@@ -1561,7 +1561,7 @@ st.divider()
 st.header("🤖 AI Graph Learning Assistant — Jetstream + Llama 3.2")
 
 st.markdown("""
-Ask questions about the **Facebook graph and the graph-learning topics on this page**,
+Ask questions about the **Facebook graph and the graph-learning topics across Pages 001–005**,
 including degree, neighbors, paths, communities, ego networks, NetworkX,
 graph representations, SQL edge tables, adjacency lists, adjacency matrices,
 BFS, reachability, density, clustering, and spring layout.
@@ -1634,244 +1634,141 @@ def _is_project_related_question(question):
         "duckdb", "edge table", "networkx", "spring layout", "layout",
         "density", "clustering", "connected", "component",
         "representation", "central", "influential", "algorithm",
+        "visualization", "histogram", "log-log", "website", "project",
+        "page 1", "page 2", "page 3", "page 4", "page 5",
+        "page 001", "page 002", "page 003", "page 004", "page 005",
         "facebook_combined", "4039", "4,039", "88234", "88,234"
     )
 
     return any(keyword in q for keyword in project_keywords)
 
 
-def build_verified_graph_context(question, graph):
-    """
-    Calculate exact dataset facts with NetworkX when the question appears to
-    require a factual result from the loaded Facebook graph.
+def build_project_knowledge_context(question):
+    q = question.lower()
+    overview = """AUTHORITATIVE PROJECT CONTEXT — PAGES 001 TO 005:
+- Page 001: small undirected graph; edge table, adjacency list, adjacency matrix; Graphviz.
+- Page 002: reachability with BFS using a deque and distances; level-by-level exploration up to k hops; O(V + E) for adjacency-list traversal.
+- Page 003: real Facebook graph; 4,039 nodes and 88,234 edges; degree, neighbors, common neighbors, histogram, exact-degree log-log plot, and NetworkX/Matplotlib visualizations.
+- Page 004: compares Edge Table/SQL, Adjacency List, and Adjacency Matrix tradeoffs and measured performance. No representation is always best.
+- Page 005: independent investigation; communities, ego networks, representation validation, and Jetstream AI.
+Use this project implementation as the source of truth when explaining how the website works.
+"""
+    details = []
+    if any(x in q for x in ('page 1','page 001','small graph','edge table','adjacency list','adjacency matrix','representation')):
+        details.append("""PAGE 001 DETAILS:
+- Toy nodes A,B,C,D,E; edges A-B, A-C, B-C, B-D, C-D, D-E.
+- Edge table stores endpoint pairs.
+- Undirected adjacency list stores both directions.
+- Adjacency matrix stores 1 symmetrically for connected pairs and 0 otherwise.
+- Graphviz draws the toy graph.
+""")
+    if any(x in q for x in ('page 2','page 002','bfs','breadth','reach','hop','queue','distance','shortest')):
+        details.append("""PAGE 002 DETAILS:
+- BFS starts at distance 0, uses a deque, visits unseen neighbors, and records distance + 1.
+- It explores level by level and stops beyond k hops.
+- In this unweighted graph, BFS gives shortest hop distances.
+- The page states O(V + E) for adjacency-list-style BFS.
+- Graphviz highlights the start and reachable nodes.
+""")
+    if any(x in q for x in ('page 3','page 003','facebook','degree','histogram','log-log','log log','spring','layout','visual','graph','draw')):
+        details.append("""PAGE 003 DETAILS:
+- facebook_combined.txt is treated as an undirected friendship graph with 4,039 nodes and 88,234 edges.
+- Degree is the number of direct neighbors.
+- The histogram groups degree values into ranges.
+- The log-log scatter uses x = exact degree and y = number of users with that exact degree. Matplotlib sets both axes to log scale; this changes spacing, not the data.
+- NetworkX/Matplotlib are used for network drawings. Spring layout controls drawing positions only; visual closeness does not prove friendship. An edge represents the direct connection.
+""")
+    if any(x in q for x in ('page 4','page 004','tradeoff','performance','runtime','complexity','sql','duckdb','edge table','adjacency','matrix','list','benchmark')):
+        details.append("""PAGE 004 DETAILS:
+- Compares Edge Table/SQL, Adjacency List, and Adjacency Matrix on the Facebook graph.
+- An unindexed edge-table neighbor query may inspect all edges; adjacency list stores neighbors directly; matrix uses a row.
+- The page describes adjacency-list BFS as O(V + E) and matrix-based BFS as O(V^2) because rows may be scanned.
+- DuckDB is used for SQL experiments. Timings are experimental, not universal hardware-independent claims.
+""")
+    if any(x in q for x in ('page 5','page 005','community','greedy','modularity','label propagation','ego','networkx','jetstream','llama','ollama','ai','how did','made','built','visual')):
+        details.append("""PAGE 005 DETAILS:
+- Pandas loads the Facebook edges and NetworkX builds an undirected nx.Graph.
+- Greedy Modularity uses nx.community.greedy_modularity_communities(graph). Explain it as greedily merging communities to improve modularity; do not describe it as selecting a single node by similarity/probability.
+- Label Propagation uses nx.community.asyn_lpa_communities(graph, seed=42). Explain it as labels spreading according to labels common among neighbors; do not claim it calculates community probabilities. seed=42 makes this project run reproducible.
+- Modularity uses nx.community.modularity(G, communities). It evaluates a partition; it does not prove real-world social groups.
+- Full community map uses nx.spring_layout(graph, seed=42, iterations=20); colors come from detected community assignments, while spring layout only determines drawing positions.
+- Largest-community zoom draws at most 150 deterministically selected nodes from the largest detected community.
+- A 1-hop ego network uses nx.ego_graph(G, selected_ego_node, radius=1): ego + direct neighbors + edges among included nodes. Large ego drawings are limited to 150 nodes, but statistics remain based on the full ego network.
+- Representation Lab builds adjacency list, boolean adjacency matrix, and DuckDB EdgeTable. It runs the same neighbor query and validates all three against NetworkX. Timing uses one warm-up and 10 measured runs, reporting the median.
+- AI uses Llama 3.2 (3B) via Ollama on Jetstream behind an authenticated HTTPS API. Streamlit/NetworkX supplies verified facts; Llama explains them.
+""")
+    if any(x in q for x in ('how did i','how did we','how i made','how did i make','these graphs','whole project','all pages','website','what did i do')):
+        details.append("""BROAD PRESENTATION ANSWER GUIDANCE:
+Explain the five-page progression: Page 001 representations -> Page 002 BFS/reachability -> Page 003 real Facebook exploration and visualizations -> Page 004 representation tradeoffs -> Page 005 communities, ego networks, validation, and Jetstream AI. Mention the actual libraries/algorithms above rather than generic alternatives.
+""")
+    if not details:
+        details.append('If an exact implementation detail is not present in this context, say it is not available rather than inventing it.')
+    return overview + '\n'.join(details)
 
-    The returned text is supplied to Llama as trusted context. Llama should
-    explain these facts, not invent replacements for them.
-    """
+
+def build_verified_graph_context(question, graph):
+    """Combine Pages 001-005 project knowledge with exact NetworkX facts."""
     original = question.strip()
     q = original.lower()
     node_ids = _extract_node_ids(original)
-
     facts = [
-        "DATASET FACTS:",
-        f"- Loaded graph nodes: {graph.number_of_nodes():,}",
-        f"- Loaded graph edges: {graph.number_of_edges():,}",
-        "- Graph type: undirected Facebook friendship graph",
-        "- A node represents a Facebook user in this dataset.",
-        "- An edge represents a friendship connection."
+        build_project_knowledge_context(original),
+        'VERIFIED DATASET FACTS:',
+        f'- Loaded graph nodes: {graph.number_of_nodes():,}',
+        f'- Loaded graph edges: {graph.number_of_edges():,}',
+        '- Graph type: undirected Facebook friendship graph',
+        '- A node represents a Facebook user in this dataset.',
+        '- An edge represents a friendship connection.'
     ]
-
-    added_specific_fact = False
-
-    # Degree / direct connections
-    if (
-        "degree" in q
-        or "direct friend" in q
-        or "direct connection" in q
-    ) and node_ids:
+    added = False
+    if ('degree' in q or 'direct friend' in q or 'direct connection' in q) and node_ids:
         node = node_ids[0]
-
-        if _node_exists(graph, node):
-            facts.append(
-                f"- VERIFIED: degree of node {node} = {graph.degree(node):,}"
-            )
+        facts.append(f'- VERIFIED: degree of node {node} = {graph.degree(node):,}' if _node_exists(graph,node) else f'- VERIFIED: node {node} does not exist in the loaded graph.')
+        added = True
+    if (('neighbor' in q or 'neighbour' in q or 'friend of node' in q) and 'common neighbor' not in q and 'common neighbour' not in q and node_ids):
+        node=node_ids[0]
+        if _node_exists(graph,node):
+            ns=list(graph.neighbors(node)); facts += [f'- VERIFIED: node {node} has {len(ns):,} direct neighbors.', f'- VERIFIED neighbor IDs for node {node}: {_format_node_list(ns)}']
+        else: facts.append(f'- VERIFIED: node {node} does not exist in the loaded graph.')
+        added=True
+    if ('common neighbor' in q or 'common neighbour' in q) and len(node_ids)>=2:
+        a,b=node_ids[:2]
+        if not _node_exists(graph,a): facts.append(f'- VERIFIED: node {a} does not exist in the loaded graph.')
+        elif not _node_exists(graph,b): facts.append(f'- VERIFIED: node {b} does not exist in the loaded graph.')
         else:
-            facts.append(
-                f"- VERIFIED: node {node} does not exist in the loaded graph."
-            )
-
-        added_specific_fact = True
-
-    # Ordinary neighbors
-    if (
-        ("neighbor" in q or "neighbour" in q or "friend of node" in q)
-        and "common neighbor" not in q
-        and "common neighbour" not in q
-        and node_ids
-    ):
-        node = node_ids[0]
-
-        if _node_exists(graph, node):
-            neighbors = list(graph.neighbors(node))
-            facts.append(
-                f"- VERIFIED: node {node} has {len(neighbors):,} direct neighbors."
-            )
-            facts.append(
-                f"- VERIFIED neighbor IDs for node {node}: "
-                f"{_format_node_list(neighbors)}"
-            )
-        else:
-            facts.append(
-                f"- VERIFIED: node {node} does not exist in the loaded graph."
-            )
-
-        added_specific_fact = True
-
-    # Common neighbors
-    if (
-        "common neighbor" in q or "common neighbour" in q
-    ) and len(node_ids) >= 2:
-        node_a, node_b = node_ids[0], node_ids[1]
-
-        if not _node_exists(graph, node_a):
-            facts.append(
-                f"- VERIFIED: node {node_a} does not exist in the loaded graph."
-            )
-        elif not _node_exists(graph, node_b):
-            facts.append(
-                f"- VERIFIED: node {node_b} does not exist in the loaded graph."
-            )
-        else:
-            common = list(nx.common_neighbors(graph, node_a, node_b))
-            facts.append(
-                f"- VERIFIED: nodes {node_a} and {node_b} have "
-                f"{len(common):,} common neighbors."
-            )
-            facts.append(
-                f"- VERIFIED common-neighbor IDs: {_format_node_list(common)}"
-            )
-
-        added_specific_fact = True
-
-    # Shortest path / hop count
-    if (
-        "shortest path" in q
-        or ("path" in q and len(node_ids) >= 2)
-        or ("hop" in q and len(node_ids) >= 2)
-    ) and len(node_ids) >= 2:
-        node_a, node_b = node_ids[0], node_ids[1]
-
-        if not _node_exists(graph, node_a):
-            facts.append(
-                f"- VERIFIED: node {node_a} does not exist in the loaded graph."
-            )
-        elif not _node_exists(graph, node_b):
-            facts.append(
-                f"- VERIFIED: node {node_b} does not exist in the loaded graph."
-            )
-        elif nx.has_path(graph, node_a, node_b):
-            path = nx.shortest_path(graph, node_a, node_b)
-            facts.append(
-                f"- VERIFIED: shortest-path hop count from {node_a} to "
-                f"{node_b} = {len(path) - 1}"
-            )
-            facts.append(
-                f"- VERIFIED shortest path: {' -> '.join(path)}"
-            )
-        else:
-            facts.append(
-                f"- VERIFIED: there is no path between nodes {node_a} and {node_b}."
-            )
-
-        added_specific_fact = True
-
-    # Ego network
-    if "ego" in q and node_ids:
-        node = node_ids[0]
-
-        if _node_exists(graph, node):
-            ego_graph_for_ai = nx.ego_graph(graph, node, radius=1)
-            facts.append(
-                f"- VERIFIED: radius-1 ego network of node {node} has "
-                f"{ego_graph_for_ai.number_of_nodes():,} nodes and "
-                f"{ego_graph_for_ai.number_of_edges():,} edges."
-            )
-        else:
-            facts.append(
-                f"- VERIFIED: node {node} does not exist in the loaded graph."
-            )
-
-        added_specific_fact = True
-
-    # Highest degree
-    if (
-        "highest degree" in q
-        or "largest degree" in q
-        or "most connected" in q
-        or "most friends" in q
-    ):
-        highest_node, highest_degree = max(
-            graph.degree,
-            key=lambda item: item[1]
-        )
-        facts.append(
-            f"- VERIFIED: highest-degree node = {highest_node}, "
-            f"degree = {highest_degree:,}"
-        )
-        added_specific_fact = True
-
-    # Connected components
-    if "connected component" in q or "how many components" in q:
-        component_count = nx.number_connected_components(graph)
-        facts.append(
-            f"- VERIFIED: connected components = {component_count:,}"
-        )
-        added_specific_fact = True
-
-    # Density
-    if "density" in q:
-        facts.append(
-            f"- VERIFIED: graph density = {nx.density(graph):.10f}"
-        )
-        added_specific_fact = True
-
-    # Clustering
-    if (
-        "average clustering" in q
-        or "clustering coefficient of graph" in q
-        or "overall clustering" in q
-    ):
-        facts.append(
-            f"- VERIFIED: average clustering coefficient = "
-            f"{nx.average_clustering(graph):.10f}"
-        )
-        added_specific_fact = True
-
-    # Exact community results are calculated only when the student asks for them.
-    if (
-        "community" in q
-        and (
-            "how many" in q
-            or "number of" in q
-            or "modularity" in q
-            or "largest" in q
-            or "compare" in q
-        )
-    ):
-        greedy_for_ai = detect_greedy_communities(data_file)
-        label_for_ai = detect_label_propagation_communities(data_file)
-
-        greedy_mod_for_ai = nx.community.modularity(
-            graph,
-            greedy_for_ai
-        )
-        label_mod_for_ai = nx.community.modularity(
-            graph,
-            label_for_ai
-        )
-
-        facts.extend([
-            f"- VERIFIED Greedy Modularity communities: "
-            f"{len(greedy_for_ai)}",
-            f"- VERIFIED Greedy Modularity largest community: "
-            f"{len(greedy_for_ai[0]):,} nodes",
-            f"- VERIFIED Greedy Modularity score: "
-            f"{greedy_mod_for_ai:.4f}",
-            f"- VERIFIED Label Propagation communities: "
-            f"{len(label_for_ai)}",
-            f"- VERIFIED Label Propagation largest community: "
-            f"{len(label_for_ai[0]):,} nodes",
-            f"- VERIFIED Label Propagation modularity score: "
-            f"{label_mod_for_ai:.4f}",
-        ])
-        added_specific_fact = True
-
-    if not added_specific_fact:
-        facts.append(
-            "- No additional numerical calculation was required for this question."
-        )
-
-    return "\n".join(facts)
+            common=list(nx.common_neighbors(graph,a,b)); facts += [f'- VERIFIED: nodes {a} and {b} have {len(common):,} common neighbors.', f'- VERIFIED common-neighbor IDs: {_format_node_list(common)}']
+        added=True
+    if ('shortest path' in q or ('path' in q and len(node_ids)>=2) or ('hop' in q and len(node_ids)>=2)) and len(node_ids)>=2:
+        a,b=node_ids[:2]
+        if not _node_exists(graph,a): facts.append(f'- VERIFIED: node {a} does not exist in the loaded graph.')
+        elif not _node_exists(graph,b): facts.append(f'- VERIFIED: node {b} does not exist in the loaded graph.')
+        elif nx.has_path(graph,a,b):
+            path=nx.shortest_path(graph,a,b); facts += [f'- VERIFIED: shortest-path hop count from {a} to {b} = {len(path)-1}', f"- VERIFIED shortest path: {' -> '.join(path)}"]
+        else: facts.append(f'- VERIFIED: there is no path between nodes {a} and {b}.')
+        added=True
+    if 'ego' in q and node_ids:
+        node=node_ids[0]
+        if _node_exists(graph,node):
+            eg=nx.ego_graph(graph,node,radius=1); facts.append(f'- VERIFIED: radius-1 ego network of node {node} has {eg.number_of_nodes():,} nodes and {eg.number_of_edges():,} edges.')
+        else: facts.append(f'- VERIFIED: node {node} does not exist in the loaded graph.')
+        added=True
+    if any(x in q for x in ('highest degree','largest degree','most connected','most friends')):
+        n,d=max(graph.degree,key=lambda item:item[1]); facts.append(f'- VERIFIED: highest-degree node = {n}, degree = {d:,}'); added=True
+    if 'connected component' in q or 'how many components' in q:
+        facts.append(f'- VERIFIED: connected components = {nx.number_connected_components(graph):,}'); added=True
+    if 'density' in q:
+        facts.append(f'- VERIFIED: graph density = {nx.density(graph):.10f}'); added=True
+    if any(x in q for x in ('average clustering','clustering coefficient of graph','overall clustering')):
+        facts.append(f'- VERIFIED: average clustering coefficient = {nx.average_clustering(graph):.10f}'); added=True
+    if any(x in q for x in ('community','communities','greedy modularity','label propagation','modularity')):
+        greedy=detect_greedy_communities(data_file); label=detect_label_propagation_communities(data_file)
+        gm=nx.community.modularity(graph,greedy); lm=nx.community.modularity(graph,label)
+        facts += [f'- VERIFIED Greedy Modularity communities: {len(greedy)}', f'- VERIFIED Greedy Modularity largest community: {len(greedy[0]):,} nodes', f'- VERIFIED Greedy Modularity score: {gm:.4f}', f'- VERIFIED Label Propagation communities: {len(label)}', f'- VERIFIED Label Propagation largest community: {len(label[0]):,} nodes', f'- VERIFIED Label Propagation modularity score: {lm:.4f}']
+        added=True
+    if not added:
+        facts.append('- No extra dataset-specific numerical calculation was required. Use the authoritative Pages 001-005 project context above.')
+    facts.append('- IMPORTANT: For implementation/visualization questions, answer from the authoritative project context above, not from model memory.')
+    return '\n'.join(facts)
 
 
 def call_jetstream_api(question, verified_context, conversation_history):
